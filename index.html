@@ -231,23 +231,37 @@
         }
 
         /* ── TABLE ── */
-        .table-wrap {
-            overflow-x: auto;
+        :root { --col-date: 90px; --col-data: 110px; }
+
+        /* Contenitore esterno: gestisce solo overflow orizzontale */
+        .table-outer {
             margin: 14px 12px;
             border-radius: var(--radius-lg);
             border: 1px solid var(--gold-border);
             background: var(--bg2);
             box-shadow: 0 4px 24px rgba(0,0,0,0.5);
-            -webkit-overflow-scrolling: touch;
+            overflow: hidden;
         }
 
-        table {
+        /* ── HEADER FISSO (sticky verticalmente) ── */
+        .table-header-wrap {
+            position: sticky;
+            top: 0;
+            z-index: 50;
+            overflow: hidden;          /* nasconde il contenuto che eccede */
+            background: var(--bg3);
+            border-bottom: 2px solid var(--gold);
+            box-shadow: 0 3px 12px rgba(0,0,0,0.6);
+        }
+
+        .table-header-wrap table {
             border-collapse: collapse;
             width: 100%;
             min-width: 680px;
+            table-layout: fixed;
         }
 
-        thead th {
+        .table-header-wrap th {
             background: var(--bg3);
             color: var(--gold);
             font-size: 11px;
@@ -255,24 +269,49 @@
             letter-spacing: 1.5px;
             text-transform: uppercase;
             padding: 13px 10px;
-            border-bottom: 1px solid var(--gold-border);
             white-space: nowrap;
+            text-align: center;
+        }
+
+        /* Colonna DATA nell'header */
+        .table-header-wrap th:first-child {
+            position: sticky;
+            left: 0;
+            z-index: 10;
+            width: var(--col-date);
+            min-width: var(--col-date);
+            background: var(--bg3);
+            border-right: 1px solid var(--gold-border);
+        }
+
+        /* ── BODY SCROLLABILE ── */
+        .table-body-wrap {
+            overflow-x: auto;
+            -webkit-overflow-scrolling: touch;
+        }
+
+        .table-body-wrap table {
+            border-collapse: collapse;
+            width: 100%;
+            min-width: 680px;
+            table-layout: fixed;
         }
 
         td {
             border: 1px solid rgba(255,255,255,0.04);
             padding: 5px 6px;
             text-align: center;
-            min-width: 110px;
+            min-width: var(--col-data);
         }
 
-        /* Sticky date column */
-        th:first-child, td:first-child {
+        /* ── STICKY COLONNA DATA (solo orizzontale) ── */
+        td:first-child {
             position: sticky;
             left: 0;
             z-index: 10;
-            min-width: 90px;
-            max-width: 90px;
+            width: var(--col-date);
+            min-width: var(--col-date);
+            max-width: var(--col-date);
             background: var(--bg3);
             border-right: 1px solid var(--gold-border);
             font-size: 12px;
@@ -280,10 +319,11 @@
             color: var(--gold);
         }
 
-        thead th:first-child { z-index: 15; }
+        /* Sincronizza scroll header e body */
+        .table-header-wrap { overflow-x: hidden; }
 
         tr.weekend td:first-child {
-            background: var(--weekend-bg);
+            background: var(--weekend-bg) !important;
             color: var(--weekend-color);
         }
 
@@ -309,6 +349,14 @@
             border-color: var(--gold);
             background: var(--bg3);
             box-shadow: 0 0 0 3px rgba(255,215,0,0.12);
+        }
+
+        input[type="text"]::placeholder {
+            color: rgba(255, 215, 0, 0.18);
+            font-size: 11px;
+            font-weight: 700;
+            letter-spacing: 1px;
+            text-transform: uppercase;
         }
 
         input[type="text"][readonly] {
@@ -816,23 +864,33 @@ function render() {
     const days = new Date(curYear, curMonth + 1, 0).getDate();
     const frag = document.createDocumentFragment();
 
-    // Wrapper
-    const wrap = document.createElement('div');
-    wrap.className = 'table-wrap';
+    // ── Contenitore esterno ──
+    const outer = document.createElement('div');
+    outer.className = 'table-outer';
 
-    const table = document.createElement('table');
+    // ── HEADER FISSO (sticky verticale) ──
+    const headerWrap = document.createElement('div');
+    headerWrap.className = 'table-header-wrap';
+    headerWrap.id = 'tableHeaderWrap';
 
-    // THEAD
-    const thead = table.createTHead();
-    const hrow = thead.insertRow();
+    const headerTable = document.createElement('table');
+    const hrow = headerTable.insertRow();
     ['Data', ...COLS_SHORT].forEach(label => {
         const th = document.createElement('th');
         th.textContent = label;
         hrow.appendChild(th);
     });
+    headerWrap.appendChild(headerTable);
+    outer.appendChild(headerWrap);
 
-    // TBODY
+    // ── BODY SCROLLABILE (overflow-x) ──
+    const bodyWrap = document.createElement('div');
+    bodyWrap.className = 'table-body-wrap';
+    bodyWrap.id = 'tableBodyWrap';
+
+    const table = document.createElement('table');
     const tbody = table.createTBody();
+
     for (let d = 1; d <= days; d++) {
         const date    = new Date(curYear, curMonth, d);
         const dayName = date.toLocaleDateString('it-IT', {weekday:'short'});
@@ -845,7 +903,7 @@ function render() {
         const dateCell = row.insertCell();
         dateCell.textContent = `${d} ${dayName}`;
 
-        COLS.forEach(c => {
+        COLS.forEach((c, ci) => {
             const cell = row.insertCell();
             const inp  = document.createElement('input');
             inp.type = 'text';
@@ -853,13 +911,14 @@ function render() {
             inp.dataset.c = c;
             inp.autocomplete = 'off';
             inp.maxLength = 30;
+            inp.placeholder = COLS_SHORT[ci];
             if (c === 'straordinari') inp.inputMode = 'decimal';
             inp.addEventListener('input', () => { inp.value = sanitize(inp.value); handleInput(); });
             cell.appendChild(inp);
         });
     }
 
-    // TOTALS (aggiornati da updateTotals)
+    // TOTALS
     const trLabel = tbody.insertRow();
     trLabel.className = 'totals-label';
     const tdLabel = trLabel.insertCell();
@@ -869,7 +928,7 @@ function render() {
     const trNum = tbody.insertRow();
     trNum.className = 'totals-numbers';
     trNum.id = 'rowNumbers';
-    trNum.insertCell(); // date spacer
+    trNum.insertCell();
     COLS.forEach(() => trNum.insertCell());
 
     const trAmt = tbody.insertRow();
@@ -878,8 +937,14 @@ function render() {
     trAmt.insertCell();
     COLS.forEach(() => trAmt.insertCell());
 
-    wrap.appendChild(table);
-    frag.appendChild(wrap);
+    bodyWrap.appendChild(table);
+    outer.appendChild(bodyWrap);
+    frag.appendChild(outer);
+
+    // Sincronizza scroll orizzontale tra header e body
+    bodyWrap.addEventListener('scroll', () => {
+        headerWrap.scrollLeft = bodyWrap.scrollLeft;
+    });
 
     // SUMMARY
     const summary = document.createElement('div');
@@ -1137,6 +1202,114 @@ function showToast(msg, type = 'info') {
 }
 
 // ============================================================
+// DATI STORICI 2026 — precaricati da backup manuale
+// ============================================================
+const HISTORICAL_2026 = {
+    // GENNAIO (mese 0)
+    0: { a: 0, v: {
+        // Roma
+        '2-roma':'S.m. pietà','3-roma':'S.m. pietà','4-roma':'S.m. pietà',
+        '5-roma':'S.m. pietà','6-roma':'S.m. pietà',
+        '7-roma':'S.m. pietà','8-roma':'S.m. pietà','9-roma':'S.m. pietà',
+        '12-roma':'S.m. pietà','13-roma':'S.m. pietà','14-roma':'S.m. pietà',
+        '15-roma':'S.m. pietà','16-roma':'S.m. pietà',
+        '19-roma':'S.m. pietà','20-roma':'S.m. pietà','21-roma':'S.m. pietà',
+        '22-roma':'S.m. pietà','23-roma':'S.m. pietà',
+        '26-roma':'S.m. pietà','27-roma':'S.m. pietà','28-roma':'S.m. pietà',
+        '29-roma':'S.m. pietà','30-roma':'S.m. pietà',
+        // Festività/Ferie colonna FE
+        '1-ferie':'Festività',
+        '2-ferie':'Ferie',
+        '5-ferie':'Ferie',
+        '6-ferie':'Festività',
+    }},
+
+    // FEBBRAIO (mese 1)
+    1: { a: 0, v: {
+        '2-roma':'S.m. pietà','3-roma':'S.m. pietà',
+        '4-roma':'Termini',
+        '5-roma':'S.m. pietà','6-roma':'S.m. pietà',
+        '9-roma':'S.m. pietà',
+        '10-roma':'Camilluccia',
+        '11-roma':'Termini','12-roma':'Termini','13-roma':'Termini',
+        '15-roma':'Termini',
+        '16-roma':'Termini',
+        '17-roma':'Termini','17-straordinari':'4',
+        '18-roma':'Teemini','18-straordinari':'3',
+        '19-roma':'Termini','19-straordinari':'4',
+        '20-trasferta':'Milano',
+        '23-trasferta':'Milano',
+        '24-trasferta':'Milano','24-straordinari':'4',
+        '25-roma':'S.m. pietà','26-roma':'S.m. pietà','27-roma':'S.m.pietà',
+        '21-sabato':'Milano',
+        '22-domenica':'Milano',
+        '15-domenica':'Termini',
+    }},
+
+    // MARZO (mese 2)
+    2: { a: 0, v: {
+        '1-roma':'Sm pieta','2-roma':'Sm pieta','3-roma':'Sm pieta',
+        '9-roma':'S m pieta','10-roma':'S m pieta','11-roma':'S m pieta',
+        '12-trasferta':'Macerata','12-straordinari':'4',
+        '13-trasferta':'Macerata','13-straordinari':'3',
+        '16-roma':'S.m.pieta',
+        '17-roma':'S.m pieta','18-roma':'S.m.pieta','19-roma':'S.m.pieta','20-roma':'S.m.pieta',
+        '23-roma':'S.m. pieta','24-roma':'S.m. pieta','25-roma':'S.m. pieta',
+        '26-roma':'S.m.pieta','27-roma':'S.m. pieta',
+        '2-trasferta':'Bologna',
+        '3-trasferta':'Bologna',
+        '4-trasferta':'Bologna','4-straordinari':'1',
+        '5-trasferta':'Bologna','5-straordinari':'1',
+        '6-trasferta':'Bologna',
+        '30-roma':'S',
+        '16-ferie':'Ferie',
+    }},
+
+    // APRILE (mese 3)
+    3: { a: 0, v: {
+        '1-roma':'Sm pieta','2-roma':'Sm pieta','3-roma':'Sm pieta',
+        '7-roma':'Sm pieta','8-roma':'Sm pieta','9-roma':'Sm pieta','10-roma':'Sm pieta',
+        '13-trasferta':'Bologna',
+        '14-trasferta':'Bologna','14-straordinari':'1',
+        '15-trasferta':'Bologna',
+        '16-roma':'Sm pieta','17-roma':'Sm pieta',
+        '20-roma':'Sm pieta',
+        '21-roma':'Malattia','22-roma':'Malattia','23-roma':'Malattia','24-roma':'Malattia',
+        '27-roma':'Sm peietà',
+        '28-trasferta':'Follonica','28-straordinari':'4',
+        '29-trasferta':'Follonica','29-straordinari':'1',
+        '30-trasferta':'Follonica','30-straordinari':'1',
+        '5-ferie':'Festivita','6-ferie':'Festivita',
+        '25-roma':'Festivita',
+    }},
+
+    // MAGGIO (mese 4)
+    4: { a: 0, v: {
+        '4-roma':'S m pieta',
+        '5-trasferta':'Follonica','5-straordinari':'4',
+        '6-trasferta':'Follonica','6-straordinari':'2',
+        '7-trasferta':'Follonica','7-straordinari':'1',
+        '8-trasferta':'Follonica','8-straordinari':'2',
+        '11-roma':'Sm pieta','12-roma':'Sm pieta',
+        '13-roma':'Ferie','13-ferie':'Ferie',
+        '14-roma':'Sm.pieta','15-roma':'Sm. Pieta',
+        '1-ferie':'Festività',
+    }},
+};
+
+function injectHistoricalData() {
+    const data = getData();
+    // Inietta solo se non ci sono già dati per il 2026
+    if (!data[2026] || Object.keys(data[2026]).length === 0) {
+        data[2026] = HISTORICAL_2026;
+        setData(data);
+        console.log('✅ Dati storici 2026 caricati');
+        return true;
+    }
+    return false;
+}
+
+// ============================================================
 // START
 // ============================================================
 window.addEventListener('beforeunload', () => {
@@ -1145,8 +1318,12 @@ window.addEventListener('beforeunload', () => {
 });
 
 if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', init);
+    document.addEventListener('DOMContentLoaded', () => {
+        injectHistoricalData();
+        init();
+    });
 } else {
+    injectHistoricalData();
     init();
 }
 </script>
