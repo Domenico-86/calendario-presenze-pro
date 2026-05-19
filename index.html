@@ -805,10 +805,27 @@ async function manualSync() {
     await downloadFromSheets(true);
 }
 
-// Auto-sync al salvataggio
+// Auto-sync al salvataggio: carica su Sheets solo se locale è più recente del remoto
 async function autoSyncIfNeeded(data) {
     try {
-        await uploadToSheets(data);
+        // Prima controlla il timestamp remoto
+        const res = await fetch(API_URL + '?t=' + Date.now());
+        const remote = await res.json();
+
+        const localTime  = new Date(data._lastModified || 0);
+        const remoteTime = new Date(remote._lastModified || 0);
+
+        if (localTime > remoteTime) {
+            // Locale più recente: carica su Sheets
+            await uploadToSheets(data);
+        } else {
+            // Remoto più recente: scarica invece di caricare
+            console.log('📥 Remoto più recente, non sovrascivo Sheets');
+            memCache = null;
+            setData(remote);
+            load();
+            setSyncState('ok', 'Sincronizzato');
+        }
     } catch(e) {
         setSyncState('error', 'Errore sync');
     }
