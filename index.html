@@ -750,7 +750,7 @@ async function uploadToSheets(data) {
     }
 }
 
-async function downloadFromSheets() {
+async function downloadFromSheets(forceRemote = false) {
     setSyncState('syncing', 'Download...');
     try {
         const res = await fetch(API_URL + '?t=' + Date.now());
@@ -758,12 +758,21 @@ async function downloadFromSheets() {
 
         if (remote.error) throw new Error(remote.error);
 
-        const local = getData();
-        const merged = mergeData(local, remote);
-        setData(merged);
+        let finalData;
+        if (forceRemote) {
+            // Sync manuale: prendi sempre il remoto
+            finalData = remote;
+        } else {
+            // Avvio automatico: merge basato su timestamp
+            const local = getData();
+            finalData = mergeData(local, remote);
+        }
+
+        memCache = null;
+        setData(finalData);
         load();
         setSyncState('ok', 'Sincronizzato');
-        showToast('📥 Dati sincronizzati', 'success');
+        showToast('📥 Dati aggiornati da cloud', 'success');
         return true;
     } catch(e) {
         console.error('Download error:', e);
@@ -791,12 +800,9 @@ function mergeData(local, remote) {
 }
 
 async function manualSync() {
-    showToast('🔄 Sincronizzazione in corso...', 'info');
-    const data = getData();
-    const uploaded = await uploadToSheets(data);
-    if (uploaded) {
-        await downloadFromSheets();
-    }
+    showToast('🔄 Scarico dati dal cloud...', 'info');
+    // Il sync manuale scarica SEMPRE il remoto, sovrascrive il locale
+    await downloadFromSheets(true);
 }
 
 // Auto-sync al salvataggio
