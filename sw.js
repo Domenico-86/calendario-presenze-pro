@@ -1,11 +1,11 @@
-const CACHE_NAME = 'presenze-v1';
+// Aggiorna questo numero ad ogni deploy per forzare il refresh
+const CACHE_NAME = 'presenze-v5';
 const ASSETS = [
-  '/',
-  '/index.html',
-  '/manifest.json'
+  '/calendario-presenze-pro/',
+  '/calendario-presenze-pro/index.html',
+  '/calendario-presenze-pro/manifest.json'
 ];
 
-// Installazione: metti in cache i file principali
 self.addEventListener('install', event => {
   event.waitUntil(
     caches.open(CACHE_NAME).then(cache => cache.addAll(ASSETS))
@@ -13,7 +13,6 @@ self.addEventListener('install', event => {
   self.skipWaiting();
 });
 
-// Attivazione: rimuovi cache vecchie
 self.addEventListener('activate', event => {
   event.waitUntil(
     caches.keys().then(keys =>
@@ -23,27 +22,39 @@ self.addEventListener('activate', event => {
   self.clients.claim();
 });
 
-// Fetch: network-first per le API, cache-first per gli asset
 self.addEventListener('fetch', event => {
   const url = new URL(event.request.url);
 
-  // Le chiamate all'API Google Scripts vanno sempre in rete
+  // API Google Scripts: sempre rete, mai cache
   if (url.hostname.includes('script.google.com')) {
     event.respondWith(
-      fetch(event.request).catch(() => new Response(JSON.stringify({error: 'offline'}), {
-        headers: { 'Content-Type': 'application/json' }
-      }))
+      fetch(event.request, {cache: 'no-store'}).catch(() =>
+        new Response(JSON.stringify({error: 'offline'}), {
+          headers: { 'Content-Type': 'application/json' }
+        })
+      )
     );
     return;
   }
 
-  // Per gli asset: cache-first con fallback network
+  // index.html: sempre rete prima, cache come fallback
+  if (url.pathname.includes('index.html') || url.pathname.endsWith('/calendario-presenze-pro/')) {
+    event.respondWith(
+      fetch(event.request, {cache: 'no-store'}).then(response => {
+        const clone = response.clone();
+        caches.open(CACHE_NAME).then(cache => cache.put(event.request, clone));
+        return response;
+      }).catch(() => caches.match(event.request))
+    );
+    return;
+  }
+
+  // Altri asset: cache first
   event.respondWith(
     caches.match(event.request).then(cached => {
       if (cached) return cached;
       return fetch(event.request).then(response => {
-        // Salva nella cache solo risposte valide
-        if (response && response.status === 200 && response.type === 'basic') {
+        if (response && response.status === 200) {
           const clone = response.clone();
           caches.open(CACHE_NAME).then(cache => cache.put(event.request, clone));
         }
