@@ -851,9 +851,11 @@ function init() {
     // Scarica dati da Sheets all'avvio (silenziosamente)
     downloadFromSheets().catch(() => {});
 
-    // Service Worker
+    // Deregistra eventuali service worker esistenti
     if ('serviceWorker' in navigator) {
-        navigator.serviceWorker.register('sw.js').catch(() => {});
+        navigator.serviceWorker.getRegistrations().then(regs => {
+            regs.forEach(reg => reg.unregister());
+        });
     }
 }
 
