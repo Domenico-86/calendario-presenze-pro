@@ -774,30 +774,20 @@ async function downloadFromSheets() {
 }
 
 function mergeData(local, remote) {
-    if (!remote || Object.keys(remote).filter(k=>!k.startsWith('_')).length === 0) return local;
-    if (!local  || Object.keys(local).filter(k=>!k.startsWith('_')).length === 0)  return remote;
+    if (!remote || Object.keys(remote).filter(k=>!k.startsWith("_")).length === 0) return local;
+    if (!local  || Object.keys(local).filter(k=>!k.startsWith("_")).length === 0)  return remote;
 
     const localTime  = new Date(local._lastModified  || 0);
     const remoteTime = new Date(remote._lastModified || 0);
-    const merged = { ...local };
 
-    for (const year in remote) {
-        if (year.startsWith('_')) continue;
-        if (!merged[year]) merged[year] = {};
-        for (const month in remote[year]) {
-            const loc = local[year]?.[month];
-            const rem = remote[year][month];
-            if (!loc) {
-                merged[year][month] = rem;
-            } else {
-                // Vince chi ha più dati; in parità vince il remoto (più recente)
-                const locKeys = Object.keys(loc.v || {}).length;
-                const remKeys = Object.keys(rem.v || {}).length;
-                merged[year][month] = remKeys >= locKeys ? rem : loc;
-            }
-        }
+    // Vince sempre il piu recente
+    if (remoteTime >= localTime) {
+        console.log("Remote piu recente:", remote._lastModified);
+        return remote;
+    } else {
+        console.log("Local piu recente:", local._lastModified);
+        return local;
     }
-    return merged;
 }
 
 async function manualSync() {
